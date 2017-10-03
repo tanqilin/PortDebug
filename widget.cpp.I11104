@@ -1,0 +1,117 @@
+#include "widget.h"
+#include "ui_widget.h"
+#include "serialport.h"
+
+#include <QtSerialPort>
+#include <QMessageBox>
+#include <QDebug>
+
+Widget::Widget(QWidget *parent) :
+    QWidget(parent),
+    ui(new Ui::Widget)
+{
+    ui->setupUi(this);
+    this->on_refreshButton_clicked(); // 软件运行时自动扫描串口
+}
+
+Widget::~Widget()
+{
+    delete ui;
+}
+
+// 刷新端口和界面
+void Widget::on_refreshButton_clicked()
+{
+    ui->portName->clear(); // 刷新前清空显示
+
+    //读取串口信息
+    foreach( const QSerialPortInfo &Info,QSerialPortInfo::availablePorts())
+    {
+        qDebug() << "portName    :"  << Info.portName();//串口号
+        qDebug() << "Description   :" << Info.description(); // 串口描述
+        qDebug() << "Manufacturer:" << Info.manufacturer();
+
+
+        QSerialPort serial;
+        serial.setPort(Info);
+
+        if( serial.open( QIODevice::ReadWrite) )//如果串口是可以读写方式打开的
+        {
+            ui->portName->addItem( Info.portName() );//在comboBox那添加串口号
+            serial.close();// 关闭串口
+        }
+    }
+
+    // 清空界面输入
+    ui->textEdit_read->setText("");
+    ui->textEdit_write->setText("");
+}
+
+// 初始化串口
+void Widget::on_pushButton_comopen_clicked()
+{
+    if(ui->portName->currentText() == ""){
+        QMessageBox::warning(this,"打开失败","未找到串口！\n请检查串口是否插入...");
+        return;
+    }
+
+    // 串口打开后禁止刷新
+    if(ui->pushButton_comopen->text() == "打开串口"){
+
+
+        ui->refreshButton->setEnabled(false);
+        ui->pushButton_comopen->setText("关闭");
+        ui->pushButton_comopen->setIcon(QIcon(":/Icon/Icon/stop.png"));
+    }else{
+        if(my_serialPort->isOpen()){
+            my_timer->stop();
+            my_serialPort->close();
+        }
+        ui->refreshButton->setEnabled(true);
+        ui->pushButton_comopen->setText("打开串口");
+        ui->pushButton_comopen->setIcon(QIcon(":/Icon/Icon/begin.png"));
+        return;
+    }
+
+    qDebug()<< serialport::InitSerialPort();
+
+    //对串口进行一些初始化
+    my_serialPort = new QSerialPort(this);
+    my_serialPort->setPortName( ui->portName->currentText() );
+    my_serialPort->open( QIODevice::ReadWrite );
+
+    my_serialPort->setBaudRate(  ui->baudRate->currentText().toInt() );//波特率
+    my_serialPort->setDataBits( QSerialPort::Data8 );//数据字节，8字节
+    my_serialPort->setParity( QSerialPort::NoParity );//校验，无
+    my_serialPort->setFlowControl( QSerialPort::NoFlowControl );//数据流控制,无
+    my_serialPort->setStopBits( QSerialPort::OneStop );//一位停止位
+
+    my_timer = new QTimer(this);
+    connect( my_timer, SIGNAL( timeout() ), this, SLOT( readMyCom() ) );
+    my_timer->start(10000);//每秒读一次
+
+}
+
+// 发送串口信息
+void Widget::on_pushButton_send_clicked()
+{
+    // 向串口写入信息
+    my_serialPort->write( ui->textEdit_write->toPlainText().toUtf8() );
+}
+
+// 读取串口返回信息
+void Widget::readMyCom()
+{
+    requestData = my_serialPort->readAll();//用requestData存储从串口那读取的数据
+    if(requestData!=NULL)//如果读取到有数据，就显示出来。
+    {
+        ui->textEdit_read->append(requestData);
+    }
+    requestData.clear();    //清除缓冲区
+}
+
+// 初始化串口
+void Widget::IniSerialPort()
+{
+
+}

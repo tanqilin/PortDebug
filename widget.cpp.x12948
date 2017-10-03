@@ -1,0 +1,188 @@
+#include "widget.h"
+#include "ui_widget.h"
+#include "serialport.h"
+#include "stdio.h"
+
+#include <QSystemTrayIcon>
+#include <QtSerialPort>
+#include <QMessageBox>
+#include <QDebug>
+#include <QMenu>
+
+Widget::Widget(QWidget *parent) :
+    QWidget(parent),
+    ui(new Ui::Widget)
+{
+    ui->setupUi(this);
+    myPort = new serialport();
+    this->on_refreshButton_clicked(); // 软件运行时自动扫描串口
+
+    // 设置系统右下角托盘图标
+    this->InitRightButtomIcon();
+}
+
+Widget::~Widget()
+{
+    delete ui;
+    delete myPort;
+    delete m_trayIcon;
+    delete menu;
+}
+
+
+void Widget::InitRightButtomIcon()
+{
+    m_trayIcon = new QSystemTrayIcon(this);
+    m_trayIcon->setIcon(QIcon(":/Icon/Icon/serialport.ico"));
+    m_trayIcon->setToolTip(tr("串口助手"));    //设置鼠标放上去显示的信息
+
+    menu = new QMenu(this);
+    exitAction = new QAction(QIcon(":/Icon/Icon/exit.png"),tr("exit"),this);
+    menu->addAction(exitAction);
+    m_trayIcon->setContextMenu(menu);
+
+    connect(exitAction, SIGNAL(triggered(bool)),this, SLOT(exitSerialPort()));
+    connect(m_trayIcon, SIGNAL(activated(QSystemTrayIcon::ActivationReason)),
+                this, SLOT(slotIconActivated(QSystemTrayIcon::ActivationReason)));
+    m_trayIcon->show();
+}
+
+
+// 刷新端口和界面
+void Widget::on_refreshButton_clicked()
+{
+    ui->portName->clear(); // 刷新前清空显示
+
+    // 扫描电脑串口并显示
+    portList = myPort->ScanSerialPort();
+    for(int i=0;i<portList.count();i++){
+        ui->portName->addItem(portList[i]);
+    }
+
+    // 清空界面输入
+    ui->textEdit_read->setText("");
+    ui->textEdit_write->setText("");
+}
+
+// 初始化串口
+void Widget::on_pushButton_comopen_clicked()
+{
+    if(ui->portName->currentText() == ""){
+        QMessageBox::warning(this,"打开失败","未找到串口！\n请检查串口是否插入...");
+        return;
+    }
+
+    // 修改按钮文字及样式
+    if(ui->pushButton_comopen->text() == "打开串口"){
+
+        if(!myPort->GetPortStatu(ui->portName->currentText())){
+            ui->textEdit_read->setText("[error]:该串口被其他程序占用...");
+            QMessageBox::warning(this,"打开失败","串口被其他用户占用...");
+            return;
+        }
+
+        ui->pushButton_send->setEnabled(true);
+        ui->baudRate->setEnabled(false);
+        ui->refreshButton->setEnabled(false);
+        ui->pushButton_comopen->setText("关闭");
+        ui->pushButton_comopen->setIcon(QIcon(":/Icon/Icon/stop.png"));
+    }else{
+        // 关闭串口
+        if(myPort->PortIsOpen()){
+            my_timer->stop();
+            myPort->ClosePort();
+        }
+
+        ui->textEdit_read->setText("");
+        ui->baudRate->setEnabled(true);
+        ui->refreshButton->setEnabled(true);
+        ui->pushButton_send->setEnabled(false);
+        ui->pushButton_comopen->setText("打开串口");
+        ui->pushButton_comopen->setIcon(QIcon(":/Icon/Icon/begin.png"));
+        return;
+    }
+
+    // 初始化串口（端口，波特率）
+    myPort->InitSerialPort(ui->portName->currentText(),ui->baudRate->currentText().toInt());
+
+    // 设置定时器
+    my_timer = new QTimer(this);
+    connect( my_timer, SIGNAL( timeout() ), this, SLOT( readMyCom() ) );
+    my_timer->start(10000);
+
+    ui->textEdit_read->setText("打开成功！");
+
+}
+
+
+// 发送串口信息
+void Widget::on_pushButton_send_clicked()
+{
+
+    if(!myPort->PortIsOpen()) return;
+
+    myPort->SendMsgToPort(ui->textEdit_write->toPlainText().toUtf8());
+
+}
+
+
+// 读取串口返回信息
+void Widget::readMyCom()
+{
+    requestData = myPort->ReadMsgForPort();
+    if(requestData!=NULL)
+    {
+        ui->textEdit_read->append(requestData);
+    }
+    requestData.clear();
+}
+
+// 修改脉冲
+void Widget::on_rotaryPulse_valueChanged(int arg1)
+{
+    //10进制数值转16进制字符串
+    QString hex = "0x"+QString("%1").arg(arg1,4,16,QLatin1Char('0'));
+    qDebug()<<hex;
+}
+
+// 托盘菜单响应
+void Widget::slotIconActivated(QSystemTrayIcon::ActivationReason reason)
+{
+    switch(reason)
+    {
+        case QSystemTrayIcon::Trigger : // 鼠标单击
+            setWindowState(Qt::WindowActive);
+            activateWindow();
+            break;
+        default:
+            break;
+    }
+}
+
+
+// 拦截窗口关闭信号
+void Widget::closeEvent(QCloseEvent *event)
+{
+    QMessageBox::StandardButton button;
+
+    if(myPort->PortIsOpen()){
+        button = QMessageBox::question(this, tr("退出程序"),
+            QString(tr("警告：当前串口正在使用中，是否退出?")),
+            QMessageBox::Yes | QMessageBox::No);
+    }else{
+        this->close();
+    }
+
+    if (button == QMessageBox::No) {
+        event->ignore();  //忽略退出信号，程序继续运行
+    }
+    else if (button == QMessageBox::Yes) {
+        this->close();
+    }
+}
+
+// 退出应用
+void Widget::exitSerialPort()
+{
+    exit(0);
+}

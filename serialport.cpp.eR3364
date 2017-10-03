@@ -1,0 +1,112 @@
+#include "serialport.h"
+#include <QtSerialPort>
+#include <String>
+#include <QDebug>
+
+serialport::serialport()
+{
+
+}
+
+serialport::~serialport()
+{
+    delete port;
+}
+
+// 扫描串口
+QVector<QString> serialport::ScanSerialPort()
+{
+
+    if(portList.length() > 0) portList.clear();
+
+    foreach( const QSerialPortInfo &Info,QSerialPortInfo::availablePorts())
+    {
+        qDebug() << "portName    :"  << Info.portName();//串口号
+        qDebug() << "Description   :" << Info.description(); // 串口描述
+        qDebug() << "Manufacturer:" << Info.manufacturer();
+
+        QSerialPort serial;
+        serial.setPort(Info);
+
+        if( serial.open( QIODevice::ReadWrite) )//如果串口是可以读写方式打开的
+        {
+            portList.append(Info.portName()); // 向数组添加能用的串口
+            serial.close();
+        }
+    }
+
+    return portList;
+}
+
+// 打开串口
+QSerialPort* serialport::InitSerialPort(QString portName,int baudRate)
+{
+    //对串口进行一些初始化
+    port = new QSerialPort();
+    port->setPortName( portName );
+    port->open( QIODevice::ReadWrite );
+    port->setBaudRate( baudRate );//波特率
+    port->setDataBits( QSerialPort::Data8 );//数据字节，8字节
+    port->setParity( QSerialPort::NoParity );//校验，无
+    port->setFlowControl( QSerialPort::NoFlowControl );//数据流控制,无
+    port->setStopBits( QSerialPort::OneStop );//一位停止位
+
+    return port;
+}
+
+// 串口状态
+bool serialport::GetPortStatu(QString portName)
+{
+    port = new QSerialPort();
+    port->setPortName( portName );
+    potStatu = port->open( QIODevice::ReadWrite );
+    port->close();
+
+    // true 串口可以使用，false 串口被占用
+    return potStatu;
+}
+
+// 串口运行状态
+bool serialport::PortIsOpen()
+{
+    // 如果对象port还没实例化
+    if(port == NULL) return false;
+
+    return port->isOpen();
+}
+
+// 读取串口数据
+QByteArray serialport::ReadMsgForPort()
+{
+    requestData = port->readAll();
+    return requestData;
+}
+
+// 向串口发送信息
+void serialport::SendMsgToPort(QString msg)
+{
+    if(!port->isOpen()) return;
+
+    // QString 转换为QByteArray 使用toLatin1()
+
+    QByteArray ba;
+    ba = msg.toLatin1();
+
+    int i = ba.length();
+
+    port->write(msg.toLatin1());
+
+    while(i--){
+        qDebug()<< ba[i];
+        port->write(ba[i]);
+    }
+}
+
+
+// 关闭串口
+void serialport::ClosePort()
+{
+    port->close();
+}
+
+

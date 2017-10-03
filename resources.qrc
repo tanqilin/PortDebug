@@ -1,0 +1,19 @@
+<RCC>
+    <qresource prefix="/Icon">
+        <file>Icon/stop.png</file>
+        <file>Icon/begin.png</file>
+        <file>Icon/left.png</file>
+        <file>Icon/right.png</file>
+        <file>Icon/serialport.ico</file>
+        <file>Icon/exit.png</file>
+        <file>Icon/help.png</file>
+        <file>Icon/east.png</file>
+        <file>Icon/north.png</file>
+        <file>Icon/south.png</file>
+        <file>Icon/west.png</file>
+        <file>Icon/east_north.png</file>
+        <file>Icon/east_south.png</file>
+        <file>Icon/west_north.png</file>
+        <file>Icon/west_south.png</file>
+    </qresource>
+</RCC>
